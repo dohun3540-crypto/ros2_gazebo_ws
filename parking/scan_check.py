@@ -23,7 +23,6 @@ class ParkingController(Node):
         self.escape_timer = 0.0
         self.is_danger = False
 
-        # 목표 위치 좌표 설정
         self.PARKING_CENTER_X = 6.15
         self.TARGET_Y = -3.2
         self.SAFE_MARGIN = 0.45
@@ -96,25 +95,16 @@ class ParkingController(Node):
                     self.get_logger().info('State: STRAIGHT_REVERSE')
 
             elif self.state == 'STRAIGHT_REVERSE':
-                # [개선된 후진 감속 로직] 지나침 현상 방지
-                error_y = self.TARGET_Y - self.y
-                
-                if error_y > 0.02:
-                    # 목표 지점에 접근할수록 속도를 부드럽게 줄임 (최소 속도 0.03으로 정밀 제어)
-                    msg.linear.x = -float(min(0.5, max(0.03, 1.0 * error_y)))
-                else:
-                    msg.linear.x = 0.0
-
+                error_y = self.y - self.TARGET_Y
+                msg.linear.x = -float(min(0.8, max(0.1, 1.0 * error_y)))
                 msg.linear.y = 0.0
                 
                 error_x = self.PARKING_CENTER_X - self.x
-                steering_gain = 1.0 
-                target_theta = math.pi / 2 - (error_x * steering_gain)
+                target_theta = (math.pi / 2) - (error_x * 0.8)
                 error_theta = target_theta - self.yaw
                 msg.angular.z = float(1.5 * error_theta)
 
-                # 정차 완료 판정
-                if abs(error_y) < 0.03:
+                if error_y < 0.05:
                     self.state = 'FINISHED'
                     self.get_logger().info('PARKING FINISHED!')
 
