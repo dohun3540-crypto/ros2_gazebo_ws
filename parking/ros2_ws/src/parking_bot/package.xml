@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>parking_bot</name>
+  <version>0.1.0</version>
+  <description>
+    2026 대회 차량 규격(1200~1500mm x 600~900mm, 차동구동 AMR) 및 후진 주차장 치수
+    (1000x1600mm 슬롯, 차선폭 100mm, 장애물 3개 900x500x600mm)를 반영한 ROS 2 + Gazebo
+    후진주차 시뮬레이션 패키지. Follow-The-Gap Method 기반 LiDAR 회피주차 제어 노드 포함.
+  </description>
+  <maintainer email="2121jhkim@gmail.com">jhkim</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

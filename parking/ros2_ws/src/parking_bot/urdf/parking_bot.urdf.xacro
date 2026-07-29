@@ -1,0 +1,314 @@
+<?xml version="1.0"?>
+<robot name="parking_bot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ============================================================
+       차량 규격 (2026년 대회 규격 이미지 기준, "헤네스 차량 크기" 예시로 산정)
+       - 차체 길이 1200~1500mm / 폭 600~900mm 범위 내 : 길이 1.4m, 폭 0.775m 채택
+       - 실제 로봇은 자동차식 전륜 조향이 아니라 "제자리 회전이 되는 AMR"(차동구동,
+         differential drive)이라, 좌/우 구동 바퀴 2개 + 앞/뒤 캐스터 볼로 구성했습니다.
+         조향각 개념 자체가 없고, 좌우 바퀴 속도차로 그 자리에서 회전합니다.
+       - wheel_separation(좌우 바퀴 간격)은 스펙에 명시되어 있지 않아 차체 폭에 맞춰
+         합리적으로 추정한 값입니다. 실제 로봇 제원이 확정되면 아래 값만 수정하면 됩니다.
+       ============================================================ -->
+  <xacro:property name="chassis_length" value="1.40" />
+  <xacro:property name="chassis_width" value="0.775" />
+  <xacro:property name="chassis_height" value="0.25" />
+  <xacro:property name="chassis_mass" value="35.0" />
+
+  <xacro:property name="wheel_radius" value="0.10" />
+  <xacro:property name="wheel_width" value="0.06" />
+  <xacro:property name="wheel_mass" value="1.2" />
+  <xacro:property name="wheel_separation" value="0.60" />  <!-- 좌/우 구동 바퀴 간격 -->
+
+  <xacro:property name="caster_radius" value="0.10" />     <!-- 앞/뒤 캐스터 볼 -->
+  <xacro:property name="caster_offset_x" value="0.55" />   <!-- 차체 중심에서 앞/뒤 캐스터까지 -->
+  <xacro:property name="caster_mass" value="0.3" />
+
+  <xacro:property name="base_height" value="${wheel_radius}" />
+
+  <material name="body_blue"><color rgba="0.17 0.42 0.69 1.0"/></material>
+  <material name="tire_black"><color rgba="0.05 0.05 0.05 1.0"/></material>
+  <material name="caster_grey"><color rgba="0.2 0.2 0.2 1.0"/></material>
+  <material name="sensor_grey"><color rgba="0.3 0.3 0.3 1.0"/></material>
+
+  <!-- ============================== base_link (섀시) ============================== -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+      <material name="body_blue"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="${chassis_mass}"/>
+      <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
+      <inertia ixx="1.8" ixy="0" ixz="0" iyy="3.0" iyz="0" izz="3.5"/>
+    </inertial>
+  </link>
+
+  <!-- ============================== 구동 바퀴 (좌/우, 차동구동) ============================== -->
+  <xacro:macro name="wheel_link" params="name">
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="tire_black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${wheel_mass}"/>
+        <inertia ixx="0.006" ixy="0" ixz="0" iyy="0.006" iyz="0" izz="0.01"/>
+      </inertial>
+    </link>
+  </xacro:macro>
+
+  <xacro:wheel_link name="left_wheel"/>
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_wheel"/>
+    <origin xyz="0 ${wheel_separation/2} 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <xacro:wheel_link name="right_wheel"/>
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_wheel"/>
+    <origin xyz="0 ${-wheel_separation/2} 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <!-- ============================== 캐스터 (앞/뒤, 자유 회전 볼) ============================== -->
+  <!-- 조향 DOF 없이 마찰 낮은 구(sphere)로 단순화한 캐스터. TurtleBot 계열 등에서
+       흔히 쓰는 방식으로, base_link에 fixed로 고정하고 마찰만 낮게 준다. -->
+  <xacro:macro name="caster_link" params="name x">
+    <link name="${name}">
+      <visual>
+        <geometry><sphere radius="${caster_radius}"/></geometry>
+        <material name="caster_grey"/>
+      </visual>
+      <collision>
+        <geometry><sphere radius="${caster_radius}"/></geometry>
+        <surface>
+          <friction><ode><mu>0.01</mu><mu2>0.01</mu2></ode></friction>
+        </surface>
+      </collision>
+      <inertial>
+        <mass value="${caster_mass}"/>
+        <inertia ixx="0.0005" ixy="0" ixz="0" iyy="0.0005" iyz="0" izz="0.0005"/>
+      </inertial>
+    </link>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${name}"/>
+      <origin xyz="${x} 0 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:caster_link name="caster_front" x="${caster_offset_x}"/>
+  <xacro:caster_link name="caster_rear" x="${-caster_offset_x}"/>
+
+  <!-- ============================== 센서 (규격표: LiDAR 1, Camera 1, GPS 1 + IMU) ============================== -->
+  <!-- 2D LiDAR : 차체 정중앙이 아니라 앞쪽(전방 범퍼 부근)에 장착. 전방+좌/우
+       180도만 보고 후방은 차체에 가려 보지 못한다(아래 gazebo 센서 설정의
+       min/max_angle 참고) - 실제로 앞쪽에 붙은 센서는 자기 뒤(차체 너머)를
+       볼 수 없다는 물리적 제약을 그대로 반영한 것. 이 때문에 후진 시 슬롯
+       안쪽(뒤쪽) 장애물/벽까지 거리는 이 라이다로 직접 잴 수 없고, 대신
+       좌/우 벽면 거리로 중앙 정렬을, 오도메트리 이동거리로 진입 깊이를
+       판단해야 한다(parking_controller.py 참고). -->
+  <xacro:property name="lidar_offset_x" value="0.65" />  <!-- chassis_length/2=0.70 바로 안쪽,
+                                                                센서 반경(0.04)만큼 여유를 둬
+                                                                차체 규격(1.4m) 밖으로 튀어나가지
+                                                                않게 한다 -->
+  <link name="lidar_link">
+    <visual>
+      <geometry><cylinder radius="0.04" length="0.05"/></geometry>
+      <material name="sensor_grey"/>
+    </visual>
+    <collision>
+      <geometry><cylinder radius="0.04" length="0.05"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.15"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="${lidar_offset_x} 0 ${chassis_height + 0.05}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 카메라 : 전방 범퍼 상단 -->
+  <link name="camera_link">
+    <visual>
+      <geometry><box size="0.03 0.09 0.03"/></geometry>
+      <material name="sensor_grey"/>
+    </visual>
+    <collision>
+      <geometry><box size="0.03 0.09 0.03"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.00005" ixy="0" ixz="0" iyy="0.00005" iyz="0" izz="0.00005"/>
+    </inertial>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${chassis_length/2} 0 ${chassis_height*0.6}" rpy="0 0 0"/>
+  </joint>
+  <link name="camera_optical_link"/>
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_link"/>
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+  </joint>
+
+  <!-- GPS(NavSat) : 차체 상단 후방 -->
+  <link name="gps_link">
+    <visual>
+      <geometry><cylinder radius="0.02" length="0.02"/></geometry>
+      <material name="sensor_grey"/>
+    </visual>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.00002" ixy="0" ixz="0" iyy="0.00002" iyz="0" izz="0.00002"/>
+    </inertial>
+  </link>
+  <joint name="gps_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="gps_link"/>
+    <origin xyz="${-chassis_length/2 + 0.1} 0 ${chassis_height + 0.02}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- IMU : 규격표의 "기타 센서(수량 제한 없음)" 항목, 차체 중심 -->
+  <link name="imu_link">
+    <inertial>
+      <mass value="0.02"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+  </link>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==============================================================
+       Gazebo Fortress (ign gazebo 6.x / ignition-gazebo6) 플러그인
+       차동구동이라 표준 DiffDrive 시스템 플러그인을 그대로 쓸 수 있다 (Fortress에도
+       있는 가장 오래되고 안정적인 플러그인 중 하나 - Ackermann 워크어라운드보다 훨씬
+       단순하고 신뢰도가 높다). /cmd_vel(Twist)로 linear.x/angular.z를 그대로 받아
+       좌우 바퀴 속도로 변환하고, 오도메트리/TF도 직접 발행한다.
+       ============================================================== -->
+  <gazebo>
+    <plugin filename="ignition-gazebo-diff-drive-system"
+            name="ignition::gazebo::systems::DiffDrive">
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+      <wheel_separation>${wheel_separation}</wheel_separation>
+      <wheel_radius>${wheel_radius}</wheel_radius>
+      <topic>cmd_vel</topic>
+      <odom_topic>/odom</odom_topic>
+      <frame_id>odom</frame_id>
+      <child_frame_id>base_footprint</child_frame_id>
+      <tf_topic>/tf</tf_topic>
+      <odom_publish_frequency>30</odom_publish_frequency>
+      <max_linear_acceleration>2.0</max_linear_acceleration>
+      <min_linear_acceleration>-2.0</min_linear_acceleration>
+      <max_angular_acceleration>6.0</max_angular_acceleration>
+      <min_angular_acceleration>-6.0</min_angular_acceleration>
+      <max_linear_velocity>0.6</max_linear_velocity>
+      <min_linear_velocity>-0.6</min_linear_velocity>
+      <max_angular_velocity>2.5</max_angular_velocity>
+      <min_angular_velocity>-2.5</min_angular_velocity>
+    </plugin>
+
+    <plugin filename="ignition-gazebo-joint-state-publisher-system"
+            name="ignition::gazebo::systems::JointStatePublisher"/>
+  </gazebo>
+
+  <!-- LiDAR 센서 : 전방+좌우 250도(-125~+125도, 실제 규격 기준). 정후방 110도만
+       스캔 범위 밖 - 차체 앞쪽에 달린 센서가 자기 차체 바로 뒤는 볼 수 없다는
+       물리적 제약을 min/max_angle로 표현하되, 좌우 대각선-후방까지는 보여서
+       후진 중에도 옆 차와의 거리를 계속 잴 수 있다. -->
+  <gazebo reference="lidar_link">
+    <sensor name="lidar" type="gpu_lidar">
+      <topic>/scan</topic>
+      <update_rate>10</update_rate>
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>251</samples>
+            <resolution>1</resolution>
+            <min_angle>-2.18166156</min_angle>
+            <max_angle>2.18166156</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.08</min>
+          <max>12.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </lidar>
+    </sensor>
+  </gazebo>
+
+  <!-- 카메라 센서 -->
+  <gazebo reference="camera_optical_link">
+    <sensor name="camera" type="camera">
+      <topic>/camera/image_raw</topic>
+      <update_rate>15</update_rate>
+      <always_on>true</always_on>
+      <camera>
+        <horizontal_fov>1.396</horizontal_fov>
+        <image><width>640</width><height>480</height></image>
+        <clip><near>0.05</near><far>50</far></clip>
+      </camera>
+    </sensor>
+  </gazebo>
+
+  <!-- GPS(NavSat) 센서 -->
+  <gazebo reference="gps_link">
+    <sensor name="navsat" type="navsat">
+      <topic>/gps/fix</topic>
+      <update_rate>5</update_rate>
+      <always_on>true</always_on>
+    </sensor>
+  </gazebo>
+
+  <!-- IMU 센서 -->
+  <gazebo reference="imu_link">
+    <sensor name="imu" type="imu">
+      <topic>/imu</topic>
+      <update_rate>50</update_rate>
+      <always_on>true</always_on>
+    </sensor>
+  </gazebo>
+
+</robot>
